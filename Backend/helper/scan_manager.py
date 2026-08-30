@@ -14,6 +14,100 @@ from Backend.helper.skip_channel import is_skip_channel, route_to_skip_channel
 from Backend.helper.split_files import parse_split_info
 from Backend.helper.subtitles import ingest_subtitle, is_subtitle_file
 
+def apply_channel_defaults(title: str, message) -> str:
+    """
+    Automatically add:
+      - 1080p when resolution is missing
+      - Malay Dubbed when file comes from a Malay channel
+      - Indonesian Dubbed when file comes from an Indonesian/Indo channel
+
+    Existing resolution/language information always wins.
+    """
+    import re
+
+    name = str(title or "").strip()
+
+    chat = getattr(message, "chat", None)
+    channel_name = str(
+        getattr(chat, "title", "") or ""
+    ).lower()
+
+    # --------------------------------------------------
+    # Detect whether filename already contains quality
+    # --------------------------------------------------
+
+    has_quality = re.search(
+        r"(?i)(?<!\w)"
+        r"(?:240|360|480|576|720|1080|1440|2160|4320)p"
+        r"(?!\w)|\b4k\b",
+        name,
+    )
+
+    # --------------------------------------------------
+    # Detect whether filename already states language
+    # --------------------------------------------------
+
+    has_language = re.search(
+        r"(?i)\b(?:"
+        r"malay|melayu|bahasa\s+malaysia|bahasa\s+melayu|"
+        r"indonesian|indonesia|indo"
+        r")\b",
+        name,
+    )
+
+    tags = []
+
+    # --------------------------------------------------
+    # Missing quality = 1080p
+    # --------------------------------------------------
+
+    if not has_quality:
+        tags.append("1080p")
+
+    # --------------------------------------------------
+    # Missing language = use Telegram channel name
+    # --------------------------------------------------
+
+    if not has_language:
+
+        if (
+            "malay" in channel_name
+            or "melayu" in channel_name
+        ):
+            tags.append("Malay Dubbed")
+
+        elif (
+            "indonesian" in channel_name
+            or "indonesia" in channel_name
+            or re.search(r"\bindo\b", channel_name)
+        ):
+            tags.append("Indonesian Dubbed")
+
+    # Nothing needs changing
+    if not tags:
+        return name
+
+    addition = " ".join(tags)
+
+    # --------------------------------------------------
+    # Put tags before .mkv / .mp4
+    # Also supports split files such as .mkv.001
+    # --------------------------------------------------
+
+    extension = re.search(
+        r"(?i)(\.(?:mkv|mp4)(?:\.\d{2,3})?)$",
+        name,
+    )
+
+    if extension:
+        base = name[:extension.start()].rstrip()
+
+        return (
+            f"{base} {addition}"
+            f"{extension.group(1)}"
+        )
+
+    return f"{name} {addition}".strip()
 SCAN_BATCH_SIZE = 200          
 SCAN_MAX_EMPTY_BATCHES = 10    
 SCAN_MAX_ID_CAP = 1_000_000    
@@ -463,6 +557,8 @@ class ScanManager:
 
         file = message.video or message.document
         title = message.caption or file.file_name
+        title = apply_channel_defaults(title, message)
+
         msg_id = message.id
         raw_size = file.file_size
         size = get_readable_file_size(file.file_size)
