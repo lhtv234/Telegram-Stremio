@@ -90,7 +90,7 @@ async def metadata(
     season = parsed.get("season")
     episode = parsed.get("episode")
     year = parsed.get("year")
-    quality = parsed.get("quality")
+   quality = parsed.get("quality") or "1080p"
 
     if season_hint is not None and episode and not season and not isinstance(episode, list):
         season = season_hint
