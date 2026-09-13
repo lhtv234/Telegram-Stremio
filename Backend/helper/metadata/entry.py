@@ -90,7 +90,8 @@ async def metadata(
     season = parsed.get("season")
     episode = parsed.get("episode")
     year = parsed.get("year")
-   quality = parsed.get("quality") or "1080p"
+    quality = parsed.get("quality") or "1080p"
+    default_id = _resolve_default_id(override_id, filename)
 
     if season_hint is not None and episode and not season and not isinstance(episode, list):
         season = season_hint
@@ -140,19 +141,15 @@ async def metadata(
             absolute = True
             parsed["episode"] = abs_ep
 
-    if not quality:
-        LOGGER.warning(f"Skipping {filename}: No resolution (parsed={parsed})")
-        return None
-    if not title:
+    if not title and not default_id:
         LOGGER.info(f"No title parsed from: {filename} (parsed={parsed})")
         return None
 
     # Strip absolute episode / release-group noise from the search title so
     # "One Piece - 1172" does not match "One Piece Egghead Arc Recap".
-    if absolute and episode is not None:
+    title = title or ""
+    if absolute and episode is not None and anime_channel_early:
         title = clean_anime_search_title(title, int(episode))
-    else:
-        title = clean_anime_search_title(title, None)
 
     default_id = _resolve_default_id(override_id, filename)
 

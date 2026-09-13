@@ -13,6 +13,7 @@ from Backend.helper.auto_catalog import start_single_media_catalog_sync
 from Backend.helper.encrypt import encode_string
 from Backend.helper.manual_add import resolve_telegram_message, stamp_caption_with_id
 from Backend.helper.requests_manager import auto_fulfill
+from Backend.helper.relaxed_ingest import metadata_for_message
 from Backend.helper.metadata import extract_default_id, metadata
 from Backend.helper.pyro import clean_filename, finalize_media_name, get_readable_file_size
 from Backend.helper.settings_manager import SettingsManager
@@ -237,7 +238,7 @@ async def file_receive_handler(client: Client, message: Message):
 
         _, title, msg_id, raw_size, size, channel = _extract_fields(message)
 
-        metadata_info = await metadata(clean_filename(title), int(channel), msg_id, override_id=override_id or extract_default_id(message.caption or ""), season_hint=season_hint)
+        title, metadata_info = await metadata_for_message(message, int(channel), msg_id, override_id=override_id, season_hint=season_hint)
         if metadata_info is None:
             LOGGER.warning(f"Metadata failed for file: {title} (ID: {msg_id})")
             await route_to_skip_channel(client, message)
@@ -289,7 +290,7 @@ async def file_edited_handler(client: Client, message: Message):
         LOGGER.info(f"Detected override ID '{override_id}' in edited message {msg_id}")
         await db.remove_media_part(int(channel), msg_id)
 
-        metadata_info = await metadata(clean_filename(title), int(channel), msg_id, override_id=override_id)
+        title, metadata_info = await metadata_for_message(message, int(channel), msg_id, override_id=override_id)
         if metadata_info is None:
             LOGGER.warning(f"Metadata failed for edited file: {title} (ID: {msg_id})")
             return
